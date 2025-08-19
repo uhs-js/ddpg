@@ -3,6 +3,7 @@
 import os
 import math
 import random
+from datetime import datetime
 from collections import deque
 
 import numpy as np
@@ -21,7 +22,7 @@ action_dim = env.action_space.shape[0]
 max_action = float(env.action_space.high[0])
 
 # 하이퍼파라미터 설정
-NUM_EPISODES = 1000
+NUM_EPISODES = 1500
 BATCH_SIZE = 128
 GAMMA = 0.99
 TAU = 0.01
@@ -32,14 +33,14 @@ HIDDEN_LAYERS_ACTOR = 128
 HIDDEN_LAYERS_CRITIC = 256
 
 # Best Buffer 설정
-BEST_BUFFER_SIZE = 5_000        # how many transitions the best buffer can hold (flattened)
-BEST_TOP_EPISODES = 5          # keep up to this many top trajectories
-BEST_SAMPLE_RATIO = 0.10        # fraction of each training batch drawn from best buffer
+BEST_BUFFER_SIZE = 10_000        # how many transitions the best buffer can hold (flattened)
+BEST_TOP_EPISODES = 2          # keep up to this many top trajectories
+BEST_SAMPLE_RATIO = 0.15        # fraction of each training batch drawn from best buffer
 BEST_ACTION_PROB = 0.20         # probability to use a best-buffer action when episode is performing worse than best
 BEST_ACTION_NOISE_STD = 0.05    # gaussian noise added to best action when used
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+print(f"device: {DEVICE}")
 
 # 신경망
 class Actor(nn.Module):
@@ -357,6 +358,7 @@ def train_ddpg(use_target_network=True, use_norm=False, num_episodes=NUM_EPISODE
     noise = OUNoise(env.action_space)
 
     rewards = []
+    avg_reward = 0.0
 
     for episode in range(num_episodes):
         state, _ = env.reset()
@@ -409,20 +411,24 @@ def train_ddpg(use_target_network=True, use_norm=False, num_episodes=NUM_EPISODE
             episode_reward += float(reward)
             step += 1
 
-            if env.vpy_canvas is not None:
-                env.vpy_canvas.caption = f'[{episode + 1}/{num_episodes}] reward: {episode_reward:.2f}'
-
         # Episode ended: consider updating best buffer with the whole trajectory
         agent.update_best_buffer(episode_trajectory, episode_reward)
 
         rewards.append(episode_reward)
 
+        if episode >= 10:
+            avg_reward = sum(rewards[episode - 10:episode]) / 10
+
+        if env.vpy_canvas is not None:
+            env.vpy_canvas.caption = f'[{episode + 1}/{num_episodes}] avg reward: {avg_reward:.2f} prev reward: {episode_reward:.2f}'
+
         if (episode + 1) % 10 == 0 or episode == 0:
-            if episode_reward >= 1000 and episode >= 500:
+            if episode >= 500 and avg_reward >= 1500:
                 env.render_mode = 'human'
-            print(f"Episode {episode + 1}/{num_episodes} - Reward: {episode_reward:.2f} (Best: {agent.best_reward if agent.best_reward != -float('inf') else 'N/A'})")
+            print(f"Episode {episode + 1}/{num_episodes} - Avg Reward: {avg_reward:.2f} (Best Reward: {agent.best_reward if agent.best_reward != -float('inf') else 'N/A'})")
 
     return agent, rewards
 
 if __name__ == "__main__":
+    print(f"train started: {datetime.now().isoformat()}")
     agent, rewards = train_ddpg(use_target_network=True, use_norm=False, num_episodes=NUM_EPISODES)
