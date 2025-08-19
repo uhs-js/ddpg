@@ -1,6 +1,4 @@
-torch
-tensorflow
-vpython
-numpy
-gymnasium
-matplotlib
+torch~=2.8.0
+vpython~=7.6.5
+gymnasium~=1.2.0
+numpy~=2.3.2
